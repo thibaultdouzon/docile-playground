@@ -1,0 +1,10 @@
+.venv
+.vscode
+.mypy_cache
+.pylintrc
+
+# docile git repository with dataset
+# available at https://github.com/rossumai/docile.git
+docile
+
+tmp_trainer
