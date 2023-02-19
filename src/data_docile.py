@@ -1,5 +1,7 @@
 from typing import *
 
+import numpy as np
+
 from docile.dataset import (
     BBox,
     Dataset as DocileRawDataset,
@@ -10,24 +12,6 @@ from transformers.tokenization_utils_fast import TruncationStrategy
 
 
 DATASET_PATH = "docile/data/docile"
-
-
-@overload
-def clamp(v: int, mi: int, ma: int) -> int:
-    ...
-
-
-@overload
-def clamp(v: float, mi: float, ma: float) -> float:
-    ...
-
-
-def clamp(v: int | float, mi: int | float, ma: int | float) -> int | float:
-    if mi > v:
-        return mi
-    if ma < v:
-        return ma
-    return v
 
 
 def normalize_bbox(
@@ -49,7 +33,19 @@ class DocileDataset(Dataset):
     def __len__(self) -> int:
         return len(self._dataset)
 
-    def __getitem__(self, idx: int):
+    @overload
+    def __getitem__(self, idx: int) -> dict[str, Any]:
+        ...
+
+    @overload
+    def __getitem__(self, idx: slice) -> list[dict[str, Any]]:
+        ...
+
+    def __getitem__(self, idx: int | slice):
+        if isinstance(idx, slice):
+            r = range(idx.start or 0, idx.stop, idx.step or 1)
+            return [self[i] for i in r]
+
         doc = self._dataset[idx]
 
         image = doc.page_image(page=0)
@@ -61,10 +57,16 @@ class DocileDataset(Dataset):
         ]
         words = [field.text for field in fields]
 
-        return self.processor(
+        encoding = self.processor(
             images=image,
             text=words,
             boxes=bboxes,
             padding=PaddingStrategy.MAX_LENGTH,
             truncation=TruncationStrategy.LONGEST_FIRST,
+            return_tensors="np",
         )
+
+        return {
+            k: (v.squeeze(0) if isinstance(v, np.ndarray) else v)
+            for k, v in encoding.items()
+        }
